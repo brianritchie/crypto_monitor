@@ -1,5 +1,5 @@
 import click
-from src.market_data.coinspot import CoinspotClient
+from crypto_monitor.market_data.coinspot import CoinspotClient
 
 @click.command()
 @click.option('--coin', default='BTC', help='Cryptocurrency symbol (e.g., BTC, XRP)')

@@ -1,5 +1,5 @@
 import pytest
-from src.market_data.coinspot import CoinspotClient
+from crypto_monitor.market_data.coinspot import CoinspotClient
 
 def test_coinspot_client_initialization():
     client = CoinspotClient()
