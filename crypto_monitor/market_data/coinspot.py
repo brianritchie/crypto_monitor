@@ -6,7 +6,7 @@ from typing import Dict, Deque
 
 class CoinspotClient:
 
-    ### Client for interacting with Coinspot's public API
+    ### Client for interacting with Coinspot's public API v2
 
     def __init__(self, max_history: int = 100):
         self.base_url = "https://www.coinspot.com.au/pubapi/v2"
@@ -22,13 +22,39 @@ class CoinspotClient:
         #Add a price point to the historical data
         self._init_history(coin)
 
+        # Ensure we have a valid response
+        if price_data['status'] != 'ok' or 'prices' not in price_data:
+            raise ValueError(f"Invalid price data: {price_data.get('message', 'Unknown error')}")
+        
+        prices = price_data['prices']
+        bid = float(prices['bid'])
+        ask = float(prices['ask'])
+        last = float(prices['last'])
+
+        # Calculate spreads
+        absolute_spread = ask - bid
+        percentage_spread = (absolute_spread / bid) * 100 if bid > 0 else 0
+
+        # Log spread calculation details
+        print(f"\nSpread Calculation for {coin}:")
+        print(f"Bid (Buy) Price: ${bid:,.2f}")
+        print(f"Ask (Sell) Price: ${ask:,.2f}")
+        print(f"Last Trade Price: ${last:,.2f}")
+        print(f"Absolute Spread: ${absolute_spread:,.2f}")
+        print(f"Percentage Spread: {percentage_spread:.3f}%")
+
         timestamp = datetime.now()
         data_point = {
             'timestamp': timestamp,
-            'open': float(price_data['prices']['bid']),
-            'high': float(price_data['prices']['ask']),
-            'low': float(price_data['prices']['bid']),
-            'close': float(price_data['prices']['last'])
+            'open': last,  # Using last price as open for this interval
+            'high': max(bid, ask, last),
+            'low': min(bid, ask, last),
+            'close': last,
+            'bid': bid,
+            'ask': ask,
+            'last': last,
+            'spread_absolute': absolute_spread,
+            'spread_percentage': percentage_spread
         }
 
         self._price_history[coin].append(data_point)
@@ -42,6 +68,12 @@ class CoinspotClient:
         if not df.empty:
             df.set_index('timestamp', inplace=True)
         return df
+    
+    def get_latest_prices(self) -> Dict:
+        endpoint = "/latest"
+        response = requests.get(f"{self.base_url}{endpoint}")
+        response.raise_for_status()
+        return response.json()
 
     def get_latest_price(self, coin: str) -> Dict:
         if not coin:
