@@ -3,8 +3,9 @@ import time
 from rich.console import Console
 from rich.table import Table
 from crypto_monitor.market_data.coinspot import CoinspotClient
-from crypto_monitor.analysis.spread_analyzer import SpreadAnalyzer
 from crypto_monitor.analysis.heikin_ashi import HeikinAshi
+from crypto_monitor.analysis.spread_analyzer import SpreadAnalyzer
+from crypto_monitor.analysis.volume_analyzer import VolumeAnalyzer
 
 console = Console()
 
@@ -18,8 +19,9 @@ def monitor_price(coin: str, interval: int, duration: int, display: str):
     client = CoinspotClient()
     ha_analyzer = HeikinAshi()
     spread_analyzer = SpreadAnalyzer()
+    volume_analyzer = VolumeAnalyzer()
 
-    click.echo(f"\nMonitoring {coin} price every {interval} seconds...")
+    console.print(f"\n[bold blue]Monitoring {coin} price every {interval} seconds...[/bold blue]")
 
     for _ in range(duration):
         try:
@@ -27,12 +29,26 @@ def monitor_price(coin: str, interval: int, duration: int, display: str):
             response = client.get_latest_price(coin)
             client.add_price_to_history(coin, response)
 
+            # Fetch order book separately
+            order_book = client.get_order_book(coin)
+
             # Get price history and calculate HA
             df = client.get_price_history(coin)
             if not df.empty:
                 ha_df = ha_analyzer.calculate(df)
                 ha_df = ha_analyzer.get_trend_signals(ha_df)
                 spread_analysis = spread_analyzer.analyze_spread(df, coin)
+
+                vbp_data = volume_analyzer.calculate_vbp(df)
+                order_book_analysis = volume_analyzer.analyze_order_book(
+                    order_book.get('buyorders', []),
+                    order_book.get('sellorders', [])
+                )
+                
+                volume_signals = volume_analyzer.get_volume_signals(
+                    vbp_data,
+                    order_book_analysis
+                )
 
                 # Get latest data point
                 latest = ha_df.iloc[-1]
@@ -87,6 +103,25 @@ def monitor_price(coin: str, interval: int, duration: int, display: str):
                     table.add_row("", "")  # Empty row for spacing
                     message = get_market_message(latest_ha['trend'], spread_analysis['condition'])
                     table.add_row("[bold]Analysis", message)
+
+                    # Volume Analysis
+                    table.add_row("", "")
+                    table.add_row("[bold]Volume Analysis", "")
+
+                    imbalance_color = {
+                        'buy': 'green',
+                        'sell': 'red',
+                        'neutral': 'yellow'
+                    }.get(order_book_analysis['dominant_side'], 'white')
+
+                    table.add_row(
+                        "Order Book Imbalance",
+                        f"[{imbalance_color}]{order_book_analysis['imbalance_ratio']:.2%}[/{imbalance_color}]"
+                    )
+
+                    if vbp_data.get('poc'):
+                        table.add_row("Point of Control", vbp_data['poc'])
+                    table.add_row("Volume Signals", volume_signals)
                     
                     console.clear()
                     console.print(table)

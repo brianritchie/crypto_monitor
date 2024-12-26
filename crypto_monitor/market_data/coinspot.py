@@ -100,3 +100,19 @@ class CoinspotClient:
             'last': float(response['prices']['last']),
             'spread': float(response['prices']['ask']) - float(response['prices']['bid'])
         }
+    
+    def get_order_book(self, coin: str) -> Dict:
+        ## Fetch Order book data for a given coin
+
+        if not coin:
+            raise ValueError("Coin symbol cannot be empty")
+        
+        coin = coin.upper()
+        endpoint = f"/orders/open/{coin}"
+
+        try:
+            response = requests.get(f"{self.base_url}{endpoint}")
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            raise requests.RequestException(f"Failed to fetch order book for {coin}: {str(e)}")
